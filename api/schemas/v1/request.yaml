@@ -1,0 +1,179 @@
+openapi: 3.0.3
+info:
+  title: Remote Behave Steps - Request Schemas
+  version: 1.0.0
+  description: >
+    Canonical request schemas for the remote_behave_steps protocol.
+    These schemas define the payload sent from the behave test runner
+    to a remote step implementation endpoint.
+
+components:
+  schemas:
+
+    RemoteStepInvocationRequest:
+      type: object
+      description: >
+        Top-level request payload sent to a remote step endpoint.
+        Contains the execution context (auto-populated by the library)
+        and the step-specific inputs.
+      required:
+        - context
+        - inputs
+      properties:
+        context:
+          $ref: '#/components/schemas/StepExecutionContext'
+        inputs:
+          $ref: '#/components/schemas/StepInputs'
+      example:
+        context:
+          run_id: "a3f1b2c4-5d6e-7f89-0abc-def123456789"
+          feature:
+            name: "User Authentication"
+            file: "features/auth/login.feature"
+            tags:
+              - "auth"
+              - "smoke"
+          scenario:
+            name: "Successful login with valid credentials"
+            id: "b4e2c3d5-6f7a-8b90-1cde-f23456789abc"
+            tags:
+              - "auth"
+              - "smoke"
+              - "happy-path"
+          step:
+            text: "the user logs in with username \"alice\" and password \"secret123\""
+            id: "c5f3d4e6-7a8b-9c01-2def-345678abcdef"
+          timestamp: "2026-03-04T14:30:00Z"
+        inputs:
+          username: "alice"
+          password: "secret123"
+
+    StepExecutionContext:
+      type: object
+      description: >
+        Execution context auto-populated by the remote_behave_steps library.
+        Provides identity and traceability for the step invocation.
+      required:
+        - run_id
+        - feature
+        - scenario
+        - step
+      properties:
+        run_id:
+          type: string
+          format: uuid
+          description: >
+            Unique identifier for this behave invocation. Serves as the
+            primary key for data isolation between concurrent test runs.
+        feature:
+          type: object
+          description: The feature file containing the current step.
+          required:
+            - name
+            - file
+          properties:
+            name:
+              type: string
+              description: The feature name as declared in the .feature file.
+            file:
+              type: string
+              description: >
+                Relative path to the .feature file from the project root.
+            tags:
+              type: array
+              items:
+                type: string
+              description: Tags applied to the feature.
+        scenario:
+          type: object
+          description: The scenario or scenario outline row being executed.
+          required:
+            - name
+            - id
+          properties:
+            name:
+              type: string
+              description: The scenario name as declared in the .feature file.
+            id:
+              type: string
+              format: uuid
+              description: >
+                Unique identifier for this scenario execution. For scenario
+                outlines, each example row receives a distinct id.
+            tags:
+              type: array
+              items:
+                type: string
+              description: >
+                Tags applied to the scenario, including inherited feature tags.
+        step:
+          type: object
+          description: The specific step being invoked.
+          required:
+            - text
+            - id
+          properties:
+            text:
+              type: string
+              description: >
+                Full step text after the keyword (Given/When/Then/And/But).
+            id:
+              type: string
+              format: uuid
+              description: Unique identifier for this step invocation.
+        timestamp:
+          type: string
+          format: date-time
+          description: >
+            ISO 8601 timestamp of when the invocation was initiated.
+            Optional; populated by the library when available.
+
+    StepInputs:
+      type: object
+      description: >
+        Step-specific data extracted from the step definition. Top-level
+        keys are string, number, or boolean values captured from the
+        step pattern parameters. May also include a table or multiline text.
+      additionalProperties:
+        oneOf:
+          - type: string
+          - type: number
+          - type: boolean
+      properties:
+        table:
+          type: object
+          description: >
+            Optional structured table data from a Gherkin data table
+            attached to the step.
+          properties:
+            headings:
+              type: array
+              items:
+                type: string
+              description: Column headings from the first row of the table.
+            rows:
+              type: array
+              items:
+                type: array
+                items:
+                  type: string
+              description: >
+                Data rows (excluding the heading row). Each row is an
+                array of string cell values.
+          required:
+            - headings
+            - rows
+        text:
+          type: string
+          description: >
+            Optional multiline text block (docstring) attached to the step.
+      example:
+        username: "alice"
+        retry_count: 3
+        table:
+          headings:
+            - "field"
+            - "value"
+          rows:
+            - ["email", "alice@example.com"]
+            - ["role", "admin"]

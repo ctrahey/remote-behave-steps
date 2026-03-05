@@ -1,0 +1,136 @@
+# To-Do App Fixture Service
+# This OpenAPI spec describes a remote behave steps provider for a to-do application.
+# It follows the remote_behave_steps meta-specification:
+#   - All step endpoints use PUT and accept RemoteStepInvocationRequest / return RemoteStepInvocationResponse
+#   - The x-behave-pattern extension on operations carries the step match pattern
+#   - x-behave-spec-version at info level declares the spec version
+openapi: 3.0.3
+info:
+  title: To-Do App Given Steps Service
+  version: 1.0.0
+  # Declares which version of the remote behave steps spec this file conforms to.
+  x-behave-spec-version: "1.0"
+
+paths:
+  /reset-all-data:
+    put:
+      summary: Reset all data to a clean baseline state
+      description: >
+        Performs a baseline reset of the to-do system, removing all items
+        and returning to a clean state. No x-behave-pattern because this
+        is a lifecycle endpoint, not a step.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              # Reset accepts the RemoteResetRequest (context + scope).
+              $ref: '../../schemas/v1/response.yaml#/components/schemas/RemoteResetRequest'
+      responses:
+        '200':
+          description: Reset completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '../../schemas/v1/response.yaml#/components/schemas/RemoteStepInvocationResponse'
+
+  /healthz:
+    get:
+      summary: Liveness probe
+      description: Returns 200 when the service is running.
+      responses:
+        '200':
+          description: Service is healthy
+
+  # -- Lifecycle Hooks (optional) --
+  # These well-known paths let the service participate in Behave's
+  # lifecycle events. The library only calls these for features/scenarios
+  # tagged @remote_hooks.
+
+  /hooks/before-scenario:
+    put:
+      summary: Called before each scenario in a @remote_hooks scope
+      description: >
+        Sets up per-scenario state such as transaction boundaries
+        or audit log markers.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/v1/hooks.yaml#/components/schemas/BeforeScenarioRequest'
+      responses:
+        '200':
+          description: Hook executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '../../schemas/v1/response.yaml#/components/schemas/RemoteStepInvocationResponse'
+
+  /hooks/after-scenario:
+    put:
+      summary: Called after each scenario in a @remote_hooks scope
+      description: >
+        Cleans up per-scenario state. Useful for rolling back transactions
+        or capturing diagnostic data on failure.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/v1/hooks.yaml#/components/schemas/AfterScenarioRequest'
+      responses:
+        '200':
+          description: Hook executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '../../schemas/v1/response.yaml#/components/schemas/RemoteStepInvocationResponse'
+
+  /existing-todos:
+    put:
+      summary: Create a number of generic to-do items
+      # x-behave-pattern carries the step text pattern for discovery.
+      # Parameters are captured with "{param_name}" syntax.
+      x-behave-pattern: 'I have "{num_todos}" existing to-do items'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/v1/request.yaml#/components/schemas/RemoteStepInvocationRequest'
+      responses:
+        '200':
+          description: To-do items created
+          content:
+            application/json:
+              schema:
+                $ref: '../../schemas/v1/response.yaml#/components/schemas/RemoteStepInvocationResponse'
+              example:
+                status: "ok"
+                data:
+                  created_ids: [1, 2, 3, 4, 5]
+
+  /todo-items-with-details:
+    put:
+      summary: Create to-do items from a step table
+      # This pattern has no named parameters; data arrives via the table
+      # field in inputs (a Gherkin step table).
+      x-behave-pattern: 'the following to-do items exist'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/v1/request.yaml#/components/schemas/RemoteStepInvocationRequest'
+      responses:
+        '200':
+          description: To-do items with details created
+          content:
+            application/json:
+              schema:
+                $ref: '../../schemas/v1/response.yaml#/components/schemas/RemoteStepInvocationResponse'
+              example:
+                status: "ok"
+                data:
+                  created_ids: [10, 11, 12]

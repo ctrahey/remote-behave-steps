@@ -1,0 +1,404 @@
+openapi: 3.0.3
+info:
+  title: Remote Behave Steps - Lifecycle Hook Schemas
+  version: 1.0.0
+  description: >
+    Canonical request schemas for remote lifecycle hooks. These hooks
+    mirror Behave's environment hooks (before_all, after_scenario, etc.)
+    and allow remote services to participate in test lifecycle events.
+
+    The library only invokes remote hooks for features or scenarios tagged
+    with @remote_hooks. Without this tag, no hook endpoints are called,
+    avoiding unnecessary network overhead.
+
+components:
+  schemas:
+
+    # -- Hook request schemas, one per scope level --
+    # Each includes only the context fields available at that scope.
+    # All hooks use PUT and return RemoteStepInvocationResponse.
+
+    BeforeAllRequest:
+      type: object
+      description: >
+        Sent to PUT /hooks/before-all at the start of a test run,
+        before any features are executed.
+      required:
+        - run_id
+      properties:
+        run_id:
+          type: string
+          format: uuid
+          description: Unique identifier for this behave invocation.
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of when the hook was triggered.
+      example:
+        run_id: "a3f1b2c4-5d6e-7f89-0abc-def123456789"
+        timestamp: "2026-03-04T14:00:00Z"
+
+    AfterAllRequest:
+      type: object
+      description: >
+        Sent to PUT /hooks/after-all at the end of a test run,
+        after all features have been executed.
+      required:
+        - run_id
+      properties:
+        run_id:
+          type: string
+          format: uuid
+          description: Unique identifier for this behave invocation.
+        timestamp:
+          type: string
+          format: date-time
+      example:
+        run_id: "a3f1b2c4-5d6e-7f89-0abc-def123456789"
+        timestamp: "2026-03-04T15:30:00Z"
+
+    BeforeFeatureRequest:
+      type: object
+      description: >
+        Sent to PUT /hooks/before-feature before a feature file
+        is executed. Only sent if the feature is tagged @remote_hooks.
+      required:
+        - run_id
+        - feature
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        feature:
+          type: object
+          required:
+            - name
+            - file
+          properties:
+            name:
+              type: string
+              description: The feature name as declared in the .feature file.
+            file:
+              type: string
+              description: Relative path to the .feature file from the project root.
+            tags:
+              type: array
+              items:
+                type: string
+              description: Tags applied to the feature.
+        timestamp:
+          type: string
+          format: date-time
+      example:
+        run_id: "a3f1b2c4-5d6e-7f89-0abc-def123456789"
+        feature:
+          name: "User Authentication"
+          file: "features/auth/login.feature"
+          tags: ["remote_hooks", "auth"]
+        timestamp: "2026-03-04T14:05:00Z"
+
+    AfterFeatureRequest:
+      type: object
+      description: >
+        Sent to PUT /hooks/after-feature after a feature file
+        has been executed. Only sent if the feature is tagged @remote_hooks.
+      required:
+        - run_id
+        - feature
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        feature:
+          type: object
+          required:
+            - name
+            - file
+          properties:
+            name:
+              type: string
+            file:
+              type: string
+            tags:
+              type: array
+              items:
+                type: string
+        timestamp:
+          type: string
+          format: date-time
+      example:
+        run_id: "a3f1b2c4-5d6e-7f89-0abc-def123456789"
+        feature:
+          name: "User Authentication"
+          file: "features/auth/login.feature"
+          tags: ["remote_hooks", "auth"]
+
+    BeforeScenarioRequest:
+      type: object
+      description: >
+        Sent to PUT /hooks/before-scenario before a scenario is executed.
+        Only sent if the scenario or its parent feature is tagged @remote_hooks.
+      required:
+        - run_id
+        - feature
+        - scenario
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        feature:
+          type: object
+          required:
+            - name
+            - file
+          properties:
+            name:
+              type: string
+            file:
+              type: string
+            tags:
+              type: array
+              items:
+                type: string
+        scenario:
+          type: object
+          required:
+            - name
+            - id
+          properties:
+            name:
+              type: string
+              description: The scenario name as declared in the .feature file.
+            id:
+              type: string
+              format: uuid
+              description: >
+                Unique identifier for this scenario execution. For scenario
+                outlines, each example row receives a distinct id.
+            tags:
+              type: array
+              items:
+                type: string
+              description: Tags applied to the scenario, including inherited feature tags.
+        timestamp:
+          type: string
+          format: date-time
+      example:
+        run_id: "a3f1b2c4-5d6e-7f89-0abc-def123456789"
+        feature:
+          name: "User Authentication"
+          file: "features/auth/login.feature"
+          tags: ["remote_hooks", "auth"]
+        scenario:
+          name: "Successful login with valid credentials"
+          id: "b4e2c3d5-6f7a-8b90-1cde-f23456789abc"
+          tags: ["remote_hooks", "auth", "happy-path"]
+
+    AfterScenarioRequest:
+      type: object
+      description: >
+        Sent to PUT /hooks/after-scenario after a scenario has been executed.
+        Only sent if the scenario or its parent feature is tagged @remote_hooks.
+      required:
+        - run_id
+        - feature
+        - scenario
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        feature:
+          type: object
+          required:
+            - name
+            - file
+          properties:
+            name:
+              type: string
+            file:
+              type: string
+            tags:
+              type: array
+              items:
+                type: string
+        scenario:
+          type: object
+          required:
+            - name
+            - id
+          properties:
+            name:
+              type: string
+            id:
+              type: string
+              format: uuid
+            tags:
+              type: array
+              items:
+                type: string
+        timestamp:
+          type: string
+          format: date-time
+      example:
+        run_id: "a3f1b2c4-5d6e-7f89-0abc-def123456789"
+        feature:
+          name: "User Authentication"
+          file: "features/auth/login.feature"
+          tags: ["remote_hooks", "auth"]
+        scenario:
+          name: "Successful login with valid credentials"
+          id: "b4e2c3d5-6f7a-8b90-1cde-f23456789abc"
+          tags: ["remote_hooks", "auth", "happy-path"]
+
+    BeforeStepRequest:
+      type: object
+      description: >
+        Sent to PUT /hooks/before-step before each step is executed.
+        Fires for all steps (local and remote) within a @remote_hooks scope.
+        Useful for tracing, audit logging, or instrumentation.
+      required:
+        - run_id
+        - feature
+        - scenario
+        - step
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        feature:
+          type: object
+          required:
+            - name
+            - file
+          properties:
+            name:
+              type: string
+            file:
+              type: string
+            tags:
+              type: array
+              items:
+                type: string
+        scenario:
+          type: object
+          required:
+            - name
+            - id
+          properties:
+            name:
+              type: string
+            id:
+              type: string
+              format: uuid
+            tags:
+              type: array
+              items:
+                type: string
+        step:
+          type: object
+          required:
+            - keyword
+            - text
+            - id
+          properties:
+            keyword:
+              type: string
+              description: The step keyword (Given, When, Then, And, But).
+            text:
+              type: string
+              description: Full step text after the keyword.
+            id:
+              type: string
+              format: uuid
+        timestamp:
+          type: string
+          format: date-time
+      example:
+        run_id: "a3f1b2c4-5d6e-7f89-0abc-def123456789"
+        feature:
+          name: "User Authentication"
+          file: "features/auth/login.feature"
+          tags: ["remote_hooks", "auth"]
+        scenario:
+          name: "Successful login with valid credentials"
+          id: "b4e2c3d5-6f7a-8b90-1cde-f23456789abc"
+          tags: ["remote_hooks", "auth", "happy-path"]
+        step:
+          keyword: "Given"
+          text: 'a user "alice" exists'
+          id: "c5f3d4e6-7a8b-9c01-2def-345678abcdef"
+
+    AfterStepRequest:
+      type: object
+      description: >
+        Sent to PUT /hooks/after-step after each step has been executed.
+        Fires for all steps (local and remote) within a @remote_hooks scope.
+      required:
+        - run_id
+        - feature
+        - scenario
+        - step
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        feature:
+          type: object
+          required:
+            - name
+            - file
+          properties:
+            name:
+              type: string
+            file:
+              type: string
+            tags:
+              type: array
+              items:
+                type: string
+        scenario:
+          type: object
+          required:
+            - name
+            - id
+          properties:
+            name:
+              type: string
+            id:
+              type: string
+              format: uuid
+            tags:
+              type: array
+              items:
+                type: string
+        step:
+          type: object
+          required:
+            - keyword
+            - text
+            - id
+          properties:
+            keyword:
+              type: string
+            text:
+              type: string
+            id:
+              type: string
+              format: uuid
+        timestamp:
+          type: string
+          format: date-time
+      example:
+        run_id: "a3f1b2c4-5d6e-7f89-0abc-def123456789"
+        feature:
+          name: "User Authentication"
+          file: "features/auth/login.feature"
+          tags: ["remote_hooks", "auth"]
+        scenario:
+          name: "Successful login with valid credentials"
+          id: "b4e2c3d5-6f7a-8b90-1cde-f23456789abc"
+          tags: ["remote_hooks", "auth", "happy-path"]
+        step:
+          keyword: "Given"
+          text: 'a user "alice" exists'
+          id: "c5f3d4e6-7a8b-9c01-2def-345678abcdef"

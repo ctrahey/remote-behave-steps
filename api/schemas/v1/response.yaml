@@ -1,0 +1,92 @@
+openapi: 3.0.3
+info:
+  title: Remote Behave Steps - Response Schemas
+  version: 1.0.0
+  description: >
+    Canonical response schemas for the remote_behave_steps protocol.
+    These schemas define the payloads returned by remote step endpoints
+    and the reset request used to clean up between runs.
+
+components:
+  schemas:
+
+    RemoteStepInvocationResponse:
+      type: object
+      description: >
+        Response returned by a remote step endpoint after executing
+        a step. On success, may include arbitrary data to be passed
+        back to the test runner context. On failure, includes error details.
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+            - error
+          description: >
+            Indicates whether the step executed successfully.
+        data:
+          type: object
+          additionalProperties: true
+          description: >
+            Arbitrary key-value data returned to the test runner on success.
+            Contents are step-specific and made available in the behave context.
+        error:
+          type: object
+          description: >
+            Error details when status is "error". Provides structured
+            information about what went wrong.
+          required:
+            - message
+          properties:
+            message:
+              type: string
+              description: Human-readable error message.
+            code:
+              type: string
+              description: >
+                Optional machine-readable error code for programmatic handling.
+            details:
+              type: object
+              additionalProperties: true
+              description: >
+                Optional additional error context such as stack traces,
+                field-level validation errors, or upstream service details.
+      example:
+        status: "ok"
+        data:
+          user_id: "usr_12345"
+          session_token: "eyJhbGciOiJIUzI1NiJ9..."
+
+    RemoteResetRequest:
+      type: object
+      description: >
+        Request sent to a remote step endpoint to reset state.
+        Used to clean up test data between runs or at the start of
+        a new test session.
+      properties:
+        context:
+          type: object
+          description: >
+            Optional context identifying the run to reset. When omitted
+            with scope "full", all state is cleared.
+          properties:
+            run_id:
+              type: string
+              format: uuid
+              description: >
+                The run identifier whose state should be cleaned up.
+        scope:
+          type: string
+          enum:
+            - full
+            - run
+          default: full
+          description: >
+            Scope of the reset. "full" clears all state across all runs.
+            "run" clears state only for the specified run_id.
+      example:
+        context:
+          run_id: "a3f1b2c4-5d6e-7f89-0abc-def123456789"
+        scope: "run"

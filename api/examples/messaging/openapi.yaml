@@ -1,0 +1,176 @@
+# Messaging / Chat Fixture Service
+# Remote behave steps provider for a messaging system.
+# Demonstrates multiline text input (message body via the text field in inputs).
+openapi: 3.0.3
+info:
+  title: Messaging Given Steps Service
+  version: 1.0.0
+  x-behave-spec-version: "1.0"
+
+paths:
+  /reset-all-data:
+    put:
+      summary: Reset all messaging data to a clean baseline
+      description: >
+        Clears user profiles, conversations, and messages.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/v1/response.yaml#/components/schemas/RemoteResetRequest'
+      responses:
+        '200':
+          description: Reset completed
+          content:
+            application/json:
+              schema:
+                $ref: '../../schemas/v1/response.yaml#/components/schemas/RemoteStepInvocationResponse'
+
+  /healthz:
+    get:
+      summary: Liveness probe
+      responses:
+        '200':
+          description: Service is healthy
+
+  # -- Lifecycle Hooks --
+  # Feature-level hooks for setting up/tearing down shared conversation state.
+  # Step-level hooks for distributed tracing and audit logging.
+
+  /hooks/before-feature:
+    put:
+      summary: Called before each @remote_hooks feature
+      description: >
+        Initializes a tracing span for the feature and sets up any
+        shared state needed across scenarios (e.g., system users).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/v1/hooks.yaml#/components/schemas/BeforeFeatureRequest'
+      responses:
+        '200':
+          description: Hook executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '../../schemas/v1/response.yaml#/components/schemas/RemoteStepInvocationResponse'
+
+  /hooks/after-feature:
+    put:
+      summary: Called after each @remote_hooks feature
+      description: >
+        Closes the tracing span and flushes any buffered audit logs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/v1/hooks.yaml#/components/schemas/AfterFeatureRequest'
+      responses:
+        '200':
+          description: Hook executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '../../schemas/v1/response.yaml#/components/schemas/RemoteStepInvocationResponse'
+
+  /hooks/before-step:
+    put:
+      summary: Called before each step in a @remote_hooks scope
+      description: >
+        Records a trace event for each step execution. Fires for all
+        steps (local and remote), useful for building a complete
+        execution timeline.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/v1/hooks.yaml#/components/schemas/BeforeStepRequest'
+      responses:
+        '200':
+          description: Hook executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '../../schemas/v1/response.yaml#/components/schemas/RemoteStepInvocationResponse'
+
+  /hooks/after-step:
+    put:
+      summary: Called after each step in a @remote_hooks scope
+      description: >
+        Completes the trace event for the step, capturing duration
+        and outcome.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/v1/hooks.yaml#/components/schemas/AfterStepRequest'
+      responses:
+        '200':
+          description: Hook executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '../../schemas/v1/response.yaml#/components/schemas/RemoteStepInvocationResponse'
+
+  /user-profile:
+    put:
+      summary: Create a user profile
+      x-behave-pattern: 'a user "{username}" exists'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/v1/request.yaml#/components/schemas/RemoteStepInvocationRequest'
+      responses:
+        '200':
+          description: User profile created
+          content:
+            application/json:
+              schema:
+                $ref: '../../schemas/v1/response.yaml#/components/schemas/RemoteStepInvocationResponse'
+
+  /conversation:
+    put:
+      summary: Create a conversation between two users
+      # Multiple named parameters in a single pattern.
+      x-behave-pattern: 'a conversation between "{user1}" and "{user2}"'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/v1/request.yaml#/components/schemas/RemoteStepInvocationRequest'
+      responses:
+        '200':
+          description: Conversation created
+          content:
+            application/json:
+              schema:
+                $ref: '../../schemas/v1/response.yaml#/components/schemas/RemoteStepInvocationResponse'
+
+  /message:
+    put:
+      summary: Send a message with a multiline body
+      # The message body comes from the Gherkin multiline text block,
+      # which is passed in the "text" field of inputs.
+      x-behave-pattern: '"{sender}" has sent a message to "{recipient}" with body'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/v1/request.yaml#/components/schemas/RemoteStepInvocationRequest'
+      responses:
+        '200':
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                $ref: '../../schemas/v1/response.yaml#/components/schemas/RemoteStepInvocationResponse'

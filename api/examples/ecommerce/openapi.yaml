@@ -1,0 +1,175 @@
+# E-Commerce Fixture Service
+# Remote behave steps provider for an e-commerce system.
+# Demonstrates typed parameters ({param:d} for integers) and timeout overrides.
+openapi: 3.0.3
+info:
+  title: E-Commerce Given Steps Service
+  version: 1.0.0
+  x-behave-spec-version: "1.0"
+
+paths:
+  /reset-all-data:
+    put:
+      summary: Reset all e-commerce data to a clean baseline
+      description: >
+        Clears user accounts, product catalog, carts, and orders.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/v1/response.yaml#/components/schemas/RemoteResetRequest'
+      responses:
+        '200':
+          description: Reset completed
+          content:
+            application/json:
+              schema:
+                $ref: '../../schemas/v1/response.yaml#/components/schemas/RemoteStepInvocationResponse'
+
+  /healthz:
+    get:
+      summary: Liveness probe
+      responses:
+        '200':
+          description: Service is healthy
+
+  # -- Lifecycle Hooks --
+  # before-all and after-all fire unconditionally (no @remote_hooks tag required)
+  # since they operate at the run level, outside any feature/scenario scope.
+
+  /hooks/before-all:
+    put:
+      summary: Called once at the start of a test run
+      description: >
+        Seeds reference data (currencies, tax rates, shipping zones) that
+        remain constant across all scenarios in the run.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/v1/hooks.yaml#/components/schemas/BeforeAllRequest'
+      responses:
+        '200':
+          description: Hook executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '../../schemas/v1/response.yaml#/components/schemas/RemoteStepInvocationResponse'
+
+  /hooks/after-all:
+    put:
+      summary: Called once at the end of a test run
+      description: >
+        Tears down run-scoped resources such as temporary payment
+        gateway sandbox sessions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/v1/hooks.yaml#/components/schemas/AfterAllRequest'
+      responses:
+        '200':
+          description: Hook executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '../../schemas/v1/response.yaml#/components/schemas/RemoteStepInvocationResponse'
+
+  /hooks/before-scenario:
+    put:
+      summary: Called before each scenario in a @remote_hooks scope
+      description: >
+        Initializes a fresh shopping session and empty cart for isolation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/v1/hooks.yaml#/components/schemas/BeforeScenarioRequest'
+      responses:
+        '200':
+          description: Hook executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '../../schemas/v1/response.yaml#/components/schemas/RemoteStepInvocationResponse'
+
+  /hooks/after-scenario:
+    put:
+      summary: Called after each scenario in a @remote_hooks scope
+      description: >
+        Rolls back any uncommitted transaction and clears the cart.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/v1/hooks.yaml#/components/schemas/AfterScenarioRequest'
+      responses:
+        '200':
+          description: Hook executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '../../schemas/v1/response.yaml#/components/schemas/RemoteStepInvocationResponse'
+
+  /user-account:
+    put:
+      summary: Create a user account with a given balance
+      # Typed parameter: {balance:d} captures an integer.
+      x-behave-pattern: 'a user "{username}" with account balance {balance:d}'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/v1/request.yaml#/components/schemas/RemoteStepInvocationRequest'
+      responses:
+        '200':
+          description: User account created
+          content:
+            application/json:
+              schema:
+                $ref: '../../schemas/v1/response.yaml#/components/schemas/RemoteStepInvocationResponse'
+
+  /product-catalog:
+    put:
+      summary: Populate the product catalog
+      x-behave-pattern: 'the product catalog contains {count:d} items'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/v1/request.yaml#/components/schemas/RemoteStepInvocationRequest'
+      responses:
+        '200':
+          description: Product catalog populated
+          content:
+            application/json:
+              schema:
+                $ref: '../../schemas/v1/response.yaml#/components/schemas/RemoteStepInvocationResponse'
+
+  /shopping-cart:
+    put:
+      summary: Add an item to a user's shopping cart
+      # Multiple string parameters and a timeout override.
+      x-behave-pattern: 'user "{username}" has item "{product_name}" in their cart'
+      # x-behave-timeout overrides the default invocation timeout (in milliseconds).
+      x-behave-timeout: 5000
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/v1/request.yaml#/components/schemas/RemoteStepInvocationRequest'
+      responses:
+        '200':
+          description: Item added to cart
+          content:
+            application/json:
+              schema:
+                $ref: '../../schemas/v1/response.yaml#/components/schemas/RemoteStepInvocationResponse'
