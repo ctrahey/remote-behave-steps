@@ -1,0 +1,22 @@
+[project]
+name = "todo-app-tests"
+version = "0.1.0"
+description = "Example: BDD tests for a to-do service using remote_behave_steps"
+requires-python = ">=3.10"
+dependencies = [
+    "remote-behave-steps",
+    "requests>=2.28",
+]
+
+# ---------------------------------------------------------------------------
+# remote_behave_steps configuration
+#
+# This is all that's needed to connect behave to a remote step provider.
+# The library reads this section automatically when you call
+# register_remote_steps() or import remote_behave_steps.auto.
+# ---------------------------------------------------------------------------
+[tool.remote_behave_steps]
+cache_ttl = 0  # Disable caching for local development; increase in CI
+
+[[tool.remote_behave_steps.servers]]
+url = "http://localhost:9876/openapi.yaml"
