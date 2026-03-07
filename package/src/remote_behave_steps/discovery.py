@@ -7,6 +7,9 @@ import yaml
 from remote_behave_steps.config import ServerConfig
 
 
+VALID_STEP_TYPES = {"given", "when", "then", "step"}
+
+
 @dataclass
 class RemoteStepDef:
     """A step definition discovered from a remote OpenAPI spec."""
@@ -14,6 +17,7 @@ class RemoteStepDef:
     endpoint: str       # URL path (e.g., /existing-todos)
     summary: str        # Human-readable summary
     timeout: int | None  # Per-step timeout override (ms), or None for default
+    step_type: str = "given"  # behave step type: given, when, then, or step
 
 
 @dataclass
@@ -64,11 +68,16 @@ def _extract_steps(spec: dict) -> list[RemoteStepDef]:
                 continue
             pattern = operation.get("x-behave-pattern")
             if pattern:
+                raw_type = operation.get("x-behave-step-type", "given")
+                step_type = raw_type.lower() if isinstance(raw_type, str) else "given"
+                if step_type not in VALID_STEP_TYPES:
+                    step_type = "given"
                 steps.append(RemoteStepDef(
                     pattern=pattern,
                     endpoint=path,
                     summary=operation.get("summary", ""),
                     timeout=operation.get("x-behave-timeout"),
+                    step_type=step_type,
                 ))
     return steps
 

@@ -22,21 +22,18 @@ lint:
 		../api/examples/messaging/openapi.yaml
 
 SERVER_PORT ?= 9876
-SERVER_PID = .server.pid
+CONTAINER_NAME = remote-behave-steps-test
+IMAGE_NAME = remote-behave-steps-test-server
 
-# Start the test server in the background
+# Start the example project's todo service in Docker
 serve:
-	.venv/bin/python -m flask --app tests.server.app run --port $(SERVER_PORT) & echo $$! > $(SERVER_PID)
-	@echo "Server started on http://127.0.0.1:$(SERVER_PORT) (PID $$(cat $(SERVER_PID)))"
+	docker build -t $(IMAGE_NAME) tests/example_project/server/
+	docker run -d --name $(CONTAINER_NAME) -p $(SERVER_PORT):8000 $(IMAGE_NAME)
+	@echo "Server started on http://127.0.0.1:$(SERVER_PORT)"
 
 # Stop the test server
 stop:
-	@if [ -f $(SERVER_PID) ]; then \
-		kill $$(cat $(SERVER_PID)) 2>/dev/null && echo "Server stopped" || echo "Server not running"; \
-		rm -f $(SERVER_PID); \
-	else \
-		echo "No PID file found"; \
-	fi
+	docker stop $(CONTAINER_NAME) 2>/dev/null && docker rm $(CONTAINER_NAME) 2>/dev/null && echo "Server stopped" || echo "Server not running"
 
 # Remove generated artifacts
 clean:

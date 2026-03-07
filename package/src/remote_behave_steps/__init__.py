@@ -37,7 +37,10 @@ To optionally forward lifecycle hooks to remote services:
 import uuid
 
 from behave import use_step_matcher
-from behave import step as behave_step_decorator
+from behave import given as behave_given
+from behave import when as behave_when
+from behave import then as behave_then
+from behave import step as behave_step
 
 from remote_behave_steps.config import load_config
 from remote_behave_steps.discovery import discover_steps, discover_hooks
@@ -97,6 +100,14 @@ def _ensure_scenario_reset(context):
             _client.reset(server, context.remote_steps_run_id)
 
 
+_STEP_DECORATORS = {
+    "given": behave_given,
+    "when": behave_when,
+    "then": behave_then,
+    "step": behave_step,
+}
+
+
 def register_remote_steps(servers=None, cache_ttl=None):
     """Register remote steps with behave's step registry.
 
@@ -129,7 +140,8 @@ def register_remote_steps(servers=None, cache_ttl=None):
             func = _make_step_function(_client, server, step_def)
             func.__doc__ = f"[Remote: {server.name}] {step_def.summary}"
             func.__name__ = f"remote_{step_def.endpoint.strip('/').replace('/', '_')}"
-            behave_step_decorator(step_def.pattern)(func)
+            decorator = _STEP_DECORATORS[step_def.step_type]
+            decorator(step_def.pattern)(func)
 
         hook_defs = discover_hooks(server)
         for hook_def in hook_defs:

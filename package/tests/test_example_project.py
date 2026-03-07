@@ -2,8 +2,12 @@
 
 Simulates the real user experience: creates a fresh venv, installs the
 example project (which depends on remote_behave_steps), and runs behave.
+
+Coverage is collected from the subprocess by running behave under
+`coverage run` and combining the data back into the main process.
 """
 
+import os
 import shutil
 import subprocess
 import sys
@@ -55,11 +59,10 @@ def example_venv(tmp_path_factory, example_project_dir):
     )
 
     # Install our local package source + the example's other deps.
-    # In a real project, `uv pip install -e .` in the example dir would
-    # pull remote-behave-steps from PyPI; here we point at local source.
+    # coverage is needed so we can collect coverage from the subprocess.
     subprocess.run(
         ["uv", "pip", "install", "--python", str(venv_python),
-         str(PACKAGE_DIR), "requests"],
+         str(PACKAGE_DIR), "requests", "coverage"],
         check=True, timeout=60,
     )
 
@@ -67,9 +70,20 @@ def example_venv(tmp_path_factory, example_project_dir):
 
 
 def _run_behave(example_venv, example_project_dir, extra_args=None):
-    """Run behave in the example project using its isolated venv."""
+    """Run behave in the example project using its isolated venv.
+
+    Runs under `coverage run` so we can collect coverage data from the
+    subprocess and combine it with the main pytest-cov report.
+    """
+    # Write coverage data into the package root so pytest-cov can find it
+    coverage_data = str(PACKAGE_DIR / ".coverage")
+
     cmd = [
-        str(example_venv), "-m", "behave",
+        str(example_venv), "-m",
+        "coverage", "run",
+        "--source=remote_behave_steps",
+        "--parallel-mode",
+        "-m", "behave",
         str(example_project_dir / "features"),
     ]
     if extra_args:
@@ -81,6 +95,10 @@ def _run_behave(example_venv, example_project_dir, extra_args=None):
         text=True,
         timeout=60,
         cwd=str(example_project_dir),
+        env={
+            **os.environ,
+            "COVERAGE_FILE": coverage_data,
+        },
     )
 
 

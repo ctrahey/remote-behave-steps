@@ -1,165 +1,205 @@
 # Remote Behave Steps
 
-A library and API meta-specification for distributed BDD testing with [Python Behave](https://behave.readthedocs.io/).
+Distributed BDD fixture setup for [Python Behave](https://behave.readthedocs.io/).
 
-In behavioral testing, scenarios describe preconditions in "Given" steps -- essentially the test's fixtures, the state the system should be in before a scenario runs. In distributed systems, it is often impractical to manipulate that state efficiently from the process running the test suite.
+In behavioral testing, scenarios describe preconditions in "Given" steps -- the fixtures that put the system into a known state before a scenario runs. In distributed systems, it is often impractical to manipulate that state from the process running the test suite. Databases, queues, caches, and third-party integrations live inside other services, behind network boundaries.
 
-Remote Behave Steps solves this by introducing a pattern: services inside the distributed system expose HTTP endpoints that the test runner discovers and invokes for fixture setup. These services can directly populate databases, inject faults, configure performance characteristics, and perform other internal operations to get the system-under-test into the desired state.
+Remote Behave Steps solves this with a simple pattern: **services expose HTTP endpoints that know how to set up their own state**, and the test runner discovers and invokes them automatically. Your feature files look exactly the same -- the plumbing is invisible.
 
-## Deliverables
+```gherkin
+Feature: To-Do Management
 
-This project provides two things:
+  Scenario: Create and verify to-do items
+    Given I have "3" existing to-do items       # served by the to-do service over HTTP
+    And a to-do item titled "Buy milk"           # also remote
+    When I request the to-do list                # local step, hits the public API
+    Then I should see 4 items                    # local assertion
+```
 
-1. **API Meta-Specification** -- A set of conventions and schemas that describe how remote step services expose themselves. The specification is "meta" because the actual API is completely custom to your system; this spec clarifies what must be true for the library to discover and invoke your endpoints.
+## This Project
 
-2. **Python Library** (forthcoming) -- A Behave extension that discovers remote step services, registers their steps, and handles invocation automatically.
+This repository provides two things:
+
+1. **API Meta-Specification** -- Conventions and schemas that describe how any service (in any language) exposes BDD fixture endpoints for discovery and invocation. See [API Meta-Specification](#api-meta-specification) below.
+
+2. **Python Library** (`remote-behave-steps`) -- A Behave extension that discovers remote step providers, registers their steps, and handles invocation. See the [package README](package/README.md) for installation, quick start, and usage.
+
+```
+  Feature File           remote_behave_steps           Service
+  ───────────            ───────────────────           ───────
+  Given I have "3"  ──>  matches pattern,         ──>  PUT /existing-todos
+  existing to-do         builds request with           { context: {...},
+  items                  context + inputs               inputs: {count: "3"} }
+                    <──  returns data to context  <──  { status: "ok",
+                                                        data: {created_ids: [1,2,3]} }
+```
+
+---
 
 ## API Meta-Specification
 
+The specification is "meta" because your actual API is completely custom to your system. This spec defines what must be true for _any_ client library to discover and invoke your fixture endpoints.
+
 ### Discovery
 
-Services provide an [OpenAPI 3.0.3](https://spec.openapis.org/oas/v3.0.3) specification document. The library parses this document and registers steps from operations that include the `x-behave-pattern` extension. This extension carries the Behave step match pattern, for example:
+Services provide an [OpenAPI 3.x](https://spec.openapis.org/) specification document. The library discovers steps from operations that include the `x-behave-pattern` extension:
 
 ```yaml
-x-behave-pattern: 'I have "{num_todos}" existing to-do items'
+paths:
+  /existing-todos:
+    put:
+      summary: Create N generic to-do items
+      x-behave-pattern: 'I have "{count}" existing to-do items'
+      x-behave-step-type: given         # optional, defaults to "given"
+      x-behave-timeout: 10000           # optional, per-step timeout in ms
 ```
 
-Using a dedicated extension field for the pattern frees the `description` field for human-readable documentation and the `summary` field for catalog display.
+Operations that lack `x-behave-pattern` (such as `/healthz`) are not registered as steps. There is no separate discovery endpoint -- the OpenAPI spec itself is the step catalog.
 
-Operations that lack `x-behave-pattern` (such as `/healthz` and `/reset-all-data`) are treated as system endpoints, not step definitions. There is no separate discovery endpoint -- the OpenAPI spec itself is the step catalog.
+### OpenAPI Extensions
 
-#### Info-Level Extensions
+| Extension | Level | Required | Description |
+|-----------|-------|----------|-------------|
+| `x-behave-pattern` | Operation | Yes (for steps) | The Behave step match pattern. Parameters use `"{name}"` syntax. |
+| `x-behave-step-type` | Operation | No | `given` (default), `when`, `then`, or `step`. |
+| `x-behave-timeout` | Operation | No | Per-step timeout override in milliseconds. |
+| `x-behave-spec-version` | Info | No | Meta-spec version (currently `"1.0"`). Reserved for forward compatibility. |
 
-- `x-behave-spec-version` -- Declares the meta-spec version in use. Included at the `info` level for forward compatibility.
+### Step Type Guidance
 
-#### Operation-Level Extensions
+The default step type is `given`, reflecting the library's primary design purpose: **remote fixture setup**. Each step endpoint declares its own type, so there is no ambiguity in the Behave step catalog.
 
-- `x-behave-pattern` -- The step match pattern (required for step operations).
-- `x-behave-timeout` -- Optional per-step timeout override, in milliseconds.
+The recommended pattern:
 
-### Invocation
+- **Remote services** handle **Given** steps (fixture setup, state manipulation, data seeding)
+- **Test runner** handles **When** and **Then** steps (actions and assertions against public interfaces)
+
+Other step types are supported but fixture setup is the core use case.
+
+### Invocation Protocol
 
 All step invocations use the **PUT** method. PUT conveys idempotent "ensure this state" semantics: calling the same step twice with the same parameters should produce the same system state.
 
-### Request Schema
+#### Request body
 
-Every step endpoint accepts a `RemoteStepInvocationRequest` body with two top-level fields:
+```json
+{
+  "context": {
+    "run_id": "550e8400-e29b-41d4-a716-446655440000",
+    "feature": {"name": "To-Do Management", "file": "features/todo.feature", "tags": []},
+    "scenario": {"name": "Create items", "id": "...", "tags": []}
+  },
+  "inputs": {
+    "count": "3",
+    "table": {"headings": ["title", "priority"], "rows": [["Buy milk", "high"]]},
+    "text": "multiline docstring content"
+  }
+}
+```
 
-- **`context`** (`StepExecutionContext`) -- Auto-populated by the library. Contains:
-  - `run_id` -- UUID identifying this behave invocation (primary key for data isolation between concurrent runs)
-  - `feature` -- Name, file path, and tags of the current feature
-  - `scenario` -- Name, id, and tags of the current scenario
-  - `step` -- Text and id of the current step
-  - `timestamp` -- ISO 8601 timestamp of invocation
+- **`context`** (`StepExecutionContext`) -- Auto-populated by the client library. Contains `run_id` (UUID for data isolation), feature/scenario metadata, and step info.
+- **`inputs`** (`StepInputs`) -- Pattern-captured parameters as string key-value pairs, plus optional `table` (Gherkin data table) and `text` (multiline docstring).
 
-- **`inputs`** (`StepInputs`) -- Step-specific data:
-  - Named parameters captured from the step pattern (as `additionalProperties`)
-  - `table` (optional) -- Gherkin data table with `headings` and `rows`
-  - `text` (optional) -- Multiline text block (docstring)
+Canonical request schema: [`api/schemas/v1/request.yaml`](api/schemas/v1/request.yaml)
 
-Canonical request schema: [`schemas/v1/request.yaml`](api/schemas/v1/request.yaml)
+#### Response body
 
-### Response Schema
-
-Step endpoints return a `RemoteStepInvocationResponse`:
+```json
+{
+  "status": "ok",
+  "data": {"created_ids": [1, 2, 3]}
+}
+```
 
 - **`status`** -- `"ok"` or `"error"`
 - **`data`** (optional) -- Arbitrary object with step-produced data (e.g., created IDs)
-- **`error`** (optional) -- Error details when status is `"error"`
+- **`error`** (optional) -- Error details when `status` is `"error"`
 
-Canonical response schema: [`schemas/v1/response.yaml`](api/schemas/v1/response.yaml)
+Canonical response schema: [`api/schemas/v1/response.yaml`](api/schemas/v1/response.yaml)
 
-### HTTP Status Conventions
+#### HTTP status conventions
 
 | Range | Meaning |
 |-------|---------|
 | 2xx   | Step executed successfully |
-| 4xx   | Test failure (bad input, unmet precondition) |
-| 5xx   | Infrastructure error (service bug, downstream outage) |
+| 4xx   | Test failure (bad input, unmet precondition) -- surfaces as `AssertionError` |
+| 5xx   | Infrastructure error (service bug, downstream outage) -- surfaces as `RemoteStepError` |
 
-## Standard Endpoints
+### Standard Endpoints
 
-### Required: `PUT /reset-all-data`
+| Endpoint | Method | Required | Purpose |
+|----------|--------|----------|---------|
+| `/openapi.yaml` | GET | Yes | The OpenAPI spec with `x-behave-pattern` extensions |
+| `/healthz` | GET | Recommended | Liveness probe. Returns 200 when the service is ready. |
+| `/reset-all-data` | PUT | Required | Reset to clean baseline state. Accepts `context` (with `run_id`) and `scope` (`"full"` or `"run"`). |
 
-Resets the system to a clean baseline state. Accepts an optional body with:
+### Lifecycle Hooks
 
-- `context` -- Execution context (provides `run_id` for scoped resets)
-- `scope` -- `"full"` (complete reset) or `"run"` (reset data for the given `run_id` only)
+Remote services can optionally participate in Behave's lifecycle by implementing well-known hook endpoints. All use PUT and return the standard response schema.
 
-### Recommended: `GET /healthz`
+| Path | Behave Hook | Scope |
+|------|-------------|-------|
+| `/hooks/before-all` | `before_all` | Unconditional |
+| `/hooks/after-all` | `after_all` | Unconditional |
+| `/hooks/before-feature` | `before_feature` | `@remote_hooks` features |
+| `/hooks/after-feature` | `after_feature` | `@remote_hooks` features |
+| `/hooks/before-scenario` | `before_scenario` | `@remote_hooks` scenarios |
+| `/hooks/after-scenario` | `after_scenario` | `@remote_hooks` scenarios |
+| `/hooks/before-step` | `before_step` | `@remote_hooks` scope |
+| `/hooks/after-step` | `after_step` | `@remote_hooks` scope |
 
-Health check endpoint. Returns 200 when the service is ready to accept step invocations.
+All hook endpoints are optional. The library discovers which hooks a service supports by checking for these paths in the OpenAPI spec.
 
-## Lifecycle Hooks
+Hook request schemas: [`api/schemas/v1/hooks.yaml`](api/schemas/v1/hooks.yaml)
 
-Remote services can optionally participate in Behave's lifecycle events by implementing well-known hook endpoints. These mirror Behave's environment hooks (`before_all`, `after_scenario`, etc.).
+#### Tag gating
 
-### Tag Gating with `@remote_hooks`
+To avoid unnecessary network overhead, hooks only fire for features or scenarios tagged `@remote_hooks` (except `before_all`/`after_all`, which fire unconditionally).
 
-To avoid unnecessary network overhead, the library **only invokes remote hook endpoints** for features or scenarios tagged with `@remote_hooks`. Without this tag, no hook calls are made. The `before_all` and `after_all` hooks are the exception -- they fire unconditionally if the endpoints exist.
+#### Hook vs. Reset
 
-```gherkin
-@remote_hooks
-Feature: User Authentication
-  # All scenarios in this feature will trigger remote hooks
-
-  Scenario: Successful login
-    Given a user "alice" exists
-    ...
-```
-
-### Well-Known Hook Paths
-
-All hook endpoints use **PUT** and return `RemoteStepInvocationResponse`. Each has a scope-appropriate request schema (defined in [`schemas/v1/hooks.yaml`](api/schemas/v1/hooks.yaml)):
-
-| Path | Behave Hook | Request Context | When Called |
-|------|-------------|-----------------|-------------|
-| `/hooks/before-all` | `before_all` | `run_id` | Start of test run |
-| `/hooks/after-all` | `after_all` | `run_id` | End of test run |
-| `/hooks/before-feature` | `before_feature` | `run_id`, `feature` | Before each `@remote_hooks` feature |
-| `/hooks/after-feature` | `after_feature` | `run_id`, `feature` | After each `@remote_hooks` feature |
-| `/hooks/before-scenario` | `before_scenario` | `run_id`, `feature`, `scenario` | Before each `@remote_hooks` scenario |
-| `/hooks/after-scenario` | `after_scenario` | `run_id`, `feature`, `scenario` | After each `@remote_hooks` scenario |
-| `/hooks/before-step` | `before_step` | `run_id`, `feature`, `scenario`, `step` | Before each step in a `@remote_hooks` scope |
-| `/hooks/after-step` | `after_step` | `run_id`, `feature`, `scenario`, `step` | After each step in a `@remote_hooks` scope |
-
-All hook endpoints are **optional**. The library discovers which hooks a service supports by checking for these paths in the OpenAPI spec. If a path is absent, that hook is simply not called.
-
-### Hook vs. Reset
-
-The `PUT /reset-all-data` endpoint is separate from hooks. It is a deliberate "nuke state" action typically called at the start of a test run or between scenarios. `before_all` is a general-purpose hook for setup that doesn't necessarily involve state destruction (e.g., initializing tracing, registering listeners).
-
-## Step Type Guidance
-
-The meta-specification does not enforce a distinction between Given, When, and Then steps. However, the recommended pattern is:
-
-- **Remote services** handle **Given** steps (fixture setup, state manipulation)
-- **Test runner** handles **When** and **Then** steps (actions and assertions against the system's public interfaces)
-
-This is guidance, not enforcement. There may be valid reasons to implement other step types remotely, but fixture setup is the primary use case.
+`PUT /reset-all-data` is separate from hooks. It is a deliberate "nuke state" action called at the start of a test run. `before_all` is a general-purpose hook for setup that doesn't involve state destruction (e.g., initializing tracing, registering listeners).
 
 ## Examples
 
-The `api/examples/` directory contains sample OpenAPI specifications demonstrating the meta-spec:
+The `api/examples/` directory contains sample OpenAPI specs:
 
 | Example | Demonstrates |
 |---------|-------------|
-| [`todo-app/`](api/examples/todo-app/) | Named parameters, table-based step, `before-scenario` / `after-scenario` hooks |
-| [`ecommerce/`](api/examples/ecommerce/) | Typed parameters (`{balance:d}`), timeout override, `before-all` / `after-all` / `before-scenario` / `after-scenario` hooks |
-| [`messaging/`](api/examples/messaging/) | Multi-parameter steps, multiline text (docstring) input, `before-feature` / `after-feature` / `before-step` / `after-step` hooks |
+| [`todo-app/`](api/examples/todo-app/) | Named parameters, table-based step, scenario hooks |
+| [`ecommerce/`](api/examples/ecommerce/) | Typed parameters, timeout overrides, full lifecycle hooks |
+| [`messaging/`](api/examples/messaging/) | Multi-parameter steps, multiline text input, step-level hooks |
 
-## Project Structure
+## Repository Structure
 
 ```
-api/
-  schemas/
-    v1/
-      request.yaml        # Canonical request schema
-      response.yaml       # Canonical response schema
-      hooks.yaml          # Lifecycle hook request schemas
-  examples/
-    todo-app/             # Basic example
-    ecommerce/            # Multi-step example with tables
-    messaging/            # Docstrings, timeouts, coordination
-  redocly.yaml            # OpenAPI linter configuration
+api/                                # API meta-specification
+  schemas/v1/                       #   Canonical request/response/hook schemas
+  examples/                         #   Sample OpenAPI specs
+  redocly.yaml                      #   OpenAPI linter configuration
+package/                            # Python library (remote-behave-steps)
+  src/remote_behave_steps/          #   Library source
+  tests/                            #   Integration tests with Docker-based test server
+  README.md                         #   Library-specific docs (install, quick start, usage)
+  pyproject.toml                    #   Package metadata and build config
 ```
+
+## Development
+
+```bash
+cd package
+uv venv && uv pip install -e ".[dev]"
+uv run pytest tests/ -v
+```
+
+The test suite builds a FastAPI fixture service as a Docker container and runs Behave scenarios against it. Docker must be running.
+
+To lint the API schemas:
+
+```bash
+cd package && make lint
+```
+
+## License
+
+MIT -- see [LICENSE](LICENSE).

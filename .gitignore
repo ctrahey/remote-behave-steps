@@ -23,6 +23,11 @@ Thumbs.db
 node_modules/
 package-lock.json
 
+# Coverage
+htmlcov/
+.coverage
+.coverage.*
+
 # Environment
 .env
 .env.*
