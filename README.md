@@ -179,7 +179,11 @@ api/                                # API meta-specification
   redocly.yaml                      #   OpenAPI linter configuration
 package/                            # Python library (remote-behave-steps)
   src/remote_behave_steps/          #   Library source
-  tests/                            #   Integration tests with Docker-based test server
+  tests/
+    example_simple/                 #   Minimal example: to-do app, auto-registration
+    example_full/                   #   Full example: retail catalog, all hooks, error handling
+    test_example_simple.py          #   Runs the simple example in an isolated venv
+    test_example_full.py            #   Runs the full example with error scenarios
   README.md                         #   Library-specific docs (install, quick start, usage)
   pyproject.toml                    #   Package metadata and build config
 ```
@@ -192,7 +196,7 @@ uv venv && uv pip install -e ".[dev]"
 uv run pytest tests/ -v
 ```
 
-The test suite builds a FastAPI fixture service as a Docker container and runs Behave scenarios against it. Docker must be running.
+The test suite builds two FastAPI fixture services as Docker containers (a simple to-do app and a full retail catalog), then runs Behave scenarios against them in isolated venvs. Docker must be running. Coverage is collected from the subprocesses automatically.
 
 To lint the API schemas:
 

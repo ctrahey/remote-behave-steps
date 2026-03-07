@@ -1,3 +1,4 @@
+@remote_hooks
 Feature: To-Do Management
   Verify that remote Given steps set up fixtures on the todo service,
   while local When/Then steps assert against its public API.

@@ -1,9 +1,12 @@
 """HTTP client for remote step invocation and lifecycle hooks."""
 
+import logging
 import requests
 
 from remote_behave_steps.config import ServerConfig
 from remote_behave_steps.discovery import RemoteStepDef
+
+logger = logging.getLogger(__name__)
 
 
 class RemoteStepError(Exception):
@@ -24,7 +27,7 @@ class RemoteStepClient:
     def invoke_step(self, server: ServerConfig, step_def: RemoteStepDef,
                     context: dict, inputs: dict) -> dict:
         """Invoke a remote step endpoint and return the response data."""
-        url = self._base_url(server) + step_def.endpoint
+        url = server.base_url + step_def.endpoint
         timeout_ms = step_def.timeout or server.timeout or self.default_timeout
         payload = {"context": context, "inputs": inputs}
 
@@ -52,17 +55,17 @@ class RemoteStepClient:
 
     def invoke_hook(self, server: ServerConfig, endpoint: str, payload: dict):
         """Invoke a lifecycle hook endpoint."""
-        url = self._base_url(server) + endpoint
+        url = server.base_url + endpoint
         timeout = server.timeout / 1000
         try:
             resp = self.session.put(url, json=payload, timeout=timeout)
             resp.raise_for_status()
-        except requests.RequestException:
-            pass  # Hook failures are non-fatal by default
+        except requests.RequestException as exc:
+            logger.debug("Hook %s on %s failed: %s", endpoint, server.name, exc)
 
     def health_check(self, server: ServerConfig, retries: int = 3):
         """Poll /healthz until the service is ready."""
-        url = self._base_url(server) + "/healthz"
+        url = server.base_url + "/healthz"
         import time
         for attempt in range(retries):
             try:
@@ -74,24 +77,3 @@ class RemoteStepClient:
             if attempt < retries - 1:
                 time.sleep(1)
         raise ConnectionError(f"Remote service {server.name} at {url} not healthy")
-
-    def reset(self, server: ServerConfig, run_id: str):
-        """Call PUT /reset-all-data on the remote service."""
-        url = self._base_url(server) + "/reset-all-data"
-        payload = {"context": {"run_id": run_id}, "scope": "full"}
-        try:
-            resp = self.session.put(url, json=payload, timeout=10)
-            resp.raise_for_status()
-        except requests.RequestException as e:
-            raise ConnectionError(
-                f"Failed to reset {server.name}: {e}"
-            ) from e
-
-    def _base_url(self, server: ServerConfig) -> str:
-        """Derive the base URL from the OpenAPI spec URL."""
-        # Strip the spec filename from the URL to get the base
-        url = server.url
-        # If URL ends with a file path like /openapi.yaml, strip it
-        if url.endswith((".yaml", ".yml", ".json")):
-            url = url.rsplit("/", 1)[0]
-        return url

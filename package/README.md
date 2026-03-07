@@ -125,12 +125,17 @@ A remote step provider is any HTTP service that serves an OpenAPI spec with `x-b
 
 ### Minimal example (FastAPI)
 
+FastAPI's `openapi_extra` parameter lets you declare the step metadata right on the endpoint decorator -- no separate config or post-processing needed:
+
 ```python
 from fastapi import FastAPI, Request
 
 app = FastAPI(title="My Fixture Service", version="1.0.0")
 
-@app.put("/existing-todos", summary="Create N generic to-do items")
+@app.put("/existing-todos", summary="Create N generic to-do items", openapi_extra={
+    "x-behave-pattern": 'I have "{count}" existing to-do items',
+    "x-behave-step-type": "given",
+})
 async def existing_todos(request: Request):
     body = await request.json()
     count = int(body["inputs"]["count"])
@@ -138,9 +143,11 @@ async def existing_todos(request: Request):
     return {"status": "ok", "data": {"created_ids": [1, 2, 3]}}
 ```
 
+The `openapi_extra` dict is merged into the operation in the generated OpenAPI spec, so the library discovers the step automatically.
+
 ### OpenAPI extensions
 
-Mark each fixture endpoint with `x-behave-pattern` so the library can discover it:
+If you're not using FastAPI, add these extensions to your OpenAPI spec manually:
 
 ```yaml
 paths:
@@ -208,12 +215,14 @@ Remote services can optionally participate in Behave's lifecycle by implementing
 
 | Path | Behave Hook | When Called |
 |------|-------------|-------------|
-| `/hooks/before-scenario` | `before_scenario` | Before each `@remote_hooks` scenario |
-| `/hooks/after-scenario` | `after_scenario` | After each `@remote_hooks` scenario |
-| `/hooks/before-feature` | `before_feature` | Before each `@remote_hooks` feature |
-| `/hooks/after-feature` | `after_feature` | After each `@remote_hooks` feature |
 | `/hooks/before-all` | `before_all` | Start of test run (unconditional) |
 | `/hooks/after-all` | `after_all` | End of test run (unconditional) |
+| `/hooks/before-feature` | `before_feature` | Before each `@remote_hooks` feature |
+| `/hooks/after-feature` | `after_feature` | After each `@remote_hooks` feature |
+| `/hooks/before-scenario` | `before_scenario` | Before each `@remote_hooks` scenario |
+| `/hooks/after-scenario` | `after_scenario` | After each `@remote_hooks` scenario |
+| `/hooks/before-step` | `before_step` | Before each step in `@remote_hooks` scope |
+| `/hooks/after-step` | `after_step` | After each step in `@remote_hooks` scope |
 
 Hooks require the `@remote_hooks` tag on the feature or scenario (except `before_all`/`after_all`). Wire them up in `environment.py`:
 
@@ -243,10 +252,6 @@ name = "todo-service"              # Optional display name (derived from URL if 
 url = "http://localhost:8080/openapi.yaml"  # Required
 timeout = 30000                    # Default step timeout in ms. Default: 30000
 ```
-
-### Environment variables
-
-- `REMOTE_STEPS_SERVER` -- Override the server URL (useful in CI)
 
 ## Full Documentation
 

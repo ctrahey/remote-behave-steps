@@ -39,6 +39,12 @@ class ServerConfig:
         if not self.name:
             self.name = _name_from_url(self.url)
 
+    @property
+    def base_url(self) -> str:
+        """Derive the base URL (scheme://netloc) from the spec URL."""
+        parsed = urlparse(self.url)
+        return f"{parsed.scheme}://{parsed.netloc}"
+
 
 @dataclass
 class Config:

@@ -40,16 +40,22 @@ HOOK_PATHS = {
 }
 
 
+def discover_all(server: ServerConfig) -> tuple[list[RemoteStepDef], list[RemoteHookDef]]:
+    """Fetch the spec once and return both steps and hooks."""
+    spec = _fetch_spec(server.url)
+    return _extract_steps(spec), _extract_hooks(spec)
+
+
 def discover_steps(server: ServerConfig) -> list[RemoteStepDef]:
     """Fetch and parse an OpenAPI spec, returning discovered step definitions."""
-    spec = _fetch_spec(server.url)
-    return _extract_steps(spec)
+    steps, _ = discover_all(server)
+    return steps
 
 
 def discover_hooks(server: ServerConfig) -> list[RemoteHookDef]:
     """Fetch and parse an OpenAPI spec, returning discovered hook endpoints."""
-    spec = _fetch_spec(server.url)
-    return _extract_hooks(spec)
+    _, hooks = discover_all(server)
+    return hooks
 
 
 def _fetch_spec(url: str) -> dict:

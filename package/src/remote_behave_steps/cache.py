@@ -43,7 +43,8 @@ class StepCache:
             "timestamp": time.time(),
             "steps": [
                 {"pattern": s.pattern, "endpoint": s.endpoint,
-                 "summary": s.summary, "timeout": s.timeout}
+                 "summary": s.summary, "timeout": s.timeout,
+                 "step_type": s.step_type}
                 for s in steps
             ],
         }

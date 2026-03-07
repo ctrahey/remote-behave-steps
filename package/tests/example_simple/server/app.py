@@ -33,6 +33,7 @@ async def reset_all_data():
 
 @app.put("/hooks/before-scenario", summary="Before scenario hook")
 async def before_scenario():
+    state["todos"] = []
     return {"status": "ok"}
 
 

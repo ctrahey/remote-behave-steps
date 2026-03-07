@@ -27,7 +27,7 @@ IMAGE_NAME = remote-behave-steps-test-server
 
 # Start the example project's todo service in Docker
 serve:
-	docker build -t $(IMAGE_NAME) tests/example_project/server/
+	docker build -t $(IMAGE_NAME) tests/example_simple/server/
 	docker run -d --name $(CONTAINER_NAME) -p $(SERVER_PORT):8000 $(IMAGE_NAME)
 	@echo "Server started on http://127.0.0.1:$(SERVER_PORT)"
 

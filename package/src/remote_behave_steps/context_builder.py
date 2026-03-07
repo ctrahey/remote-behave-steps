@@ -1,13 +1,14 @@
 """Build request payloads from behave context objects."""
 
 import uuid
+from datetime import datetime, timezone
 
 
 def build_step_context(context) -> dict:
     """Build a StepExecutionContext dict from a behave Context during step execution."""
     run_id = getattr(context, "remote_steps_run_id", str(uuid.uuid4()))
 
-    ctx = {"run_id": run_id}
+    ctx = {"run_id": run_id, "timestamp": datetime.now(timezone.utc).isoformat()}
 
     if hasattr(context, "feature") and context.feature:
         feature = context.feature
@@ -41,7 +42,7 @@ def build_step_context(context) -> dict:
 def build_hook_context(context, hook_name: str, **kwargs) -> dict:
     """Build a hook request payload from behave context."""
     run_id = getattr(context, "remote_steps_run_id", str(uuid.uuid4()))
-    payload = {"run_id": run_id}
+    payload = {"run_id": run_id, "timestamp": datetime.now(timezone.utc).isoformat()}
 
     # Feature-level hooks
     feature = kwargs.get("feature") or getattr(context, "feature", None)

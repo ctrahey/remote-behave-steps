@@ -43,7 +43,7 @@ from behave import then as behave_then
 from behave import step as behave_step
 
 from remote_behave_steps.config import load_config
-from remote_behave_steps.discovery import discover_steps, discover_hooks
+from remote_behave_steps.discovery import discover_all
 from remote_behave_steps.cache import StepCache
 from remote_behave_steps.client import RemoteStepClient, RemoteStepError
 from remote_behave_steps.context_builder import build_step_context, build_hook_context
@@ -54,17 +54,23 @@ __all__ = [
     "RemoteStepError",
 ]
 
-# Module-level state shared between registration and invocation
-_client = None
-_config = None
-_server_hooks = {}  # {hook_name: [(server, endpoint), ...]}
+
+class _Registry:
+    """Consolidated module-level state, resettable for testing."""
+    def __init__(self):
+        self.client = None
+        self.config = None
+        self.server_hooks = {}  # {hook_name: [(server, endpoint), ...]}
+
+
+_registry = _Registry()
 
 
 def _ensure_context_ready(context):
     """Lazily initialize remote steps state on the behave context.
 
     Called automatically before the first remote step or hook fires.
-    Sets up run_id, performs health checks, and resets remote state.
+    Sets up run_id, performs health checks.
     Uses _set_root_attribute so values persist across scenario boundaries.
 
     Note: behave's Context.__getattr__ skips the stack walk for underscore-
@@ -77,10 +83,9 @@ def _ensure_context_ready(context):
     context._set_root_attribute("remote_steps_scenario_id", None)
     context.remote_data = {}
 
-    if _client and _config:
-        for server in _config.servers:
-            _client.health_check(server)
-            _client.reset(server, context.remote_steps_run_id)
+    if _registry.client and _registry.config:
+        for server in _registry.config.servers:
+            _registry.client.health_check(server)
 
 
 def _ensure_scenario_reset(context):
@@ -94,10 +99,6 @@ def _ensure_scenario_reset(context):
         return  # Already reset for this scenario
     context._set_root_attribute("remote_steps_scenario_id", current_id)
     context.remote_data = {}
-
-    if _client and _config:
-        for server in _config.servers:
-            _client.reset(server, context.remote_steps_run_id)
 
 
 _STEP_DECORATORS = {
@@ -127,25 +128,37 @@ def register_remote_steps(servers=None, cache_ttl=None):
     config = load_config(servers=servers, cache_ttl=cache_ttl)
     cache = StepCache(config.cache_ttl)
 
-    global _client, _config, _server_hooks
-    _config = config
-    _client = RemoteStepClient()
-    _server_hooks = {}
+    _registry.config = config
+    _registry.client = RemoteStepClient()
+    _registry.server_hooks = {}
 
     use_step_matcher("parse")
 
     for server in config.servers:
-        step_defs = cache.get_or_fetch(server, lambda s=server: discover_steps(s))
+        # Try cache first; on miss, discover_all fetches once for both
+        _discovered = {}  # shared between cache fetch_fn and hook extraction
+
+        def _fetch_steps(s=server):
+            steps, hooks = discover_all(s)
+            _discovered["hooks"] = hooks
+            return steps
+
+        step_defs = cache.get_or_fetch(server, _fetch_steps)
+        # If cache hit, _discovered is empty — fetch hooks separately
+        if "hooks" not in _discovered:
+            _, hook_defs = discover_all(server)
+        else:
+            hook_defs = _discovered["hooks"]
+
         for step_def in step_defs:
-            func = _make_step_function(_client, server, step_def)
+            func = _make_step_function(_registry.client, server, step_def)
             func.__doc__ = f"[Remote: {server.name}] {step_def.summary}"
             func.__name__ = f"remote_{step_def.endpoint.strip('/').replace('/', '_')}"
             decorator = _STEP_DECORATORS[step_def.step_type]
             decorator(step_def.pattern)(func)
 
-        hook_defs = discover_hooks(server)
         for hook_def in hook_defs:
-            _server_hooks.setdefault(hook_def.hook_name, []).append(
+            _registry.server_hooks.setdefault(hook_def.hook_name, []).append(
                 (server, hook_def.endpoint)
             )
 
@@ -239,12 +252,12 @@ class _Hooks:
         self._fire_hook("after_step", context, step=step)
 
     def _fire_hook(self, hook_name, context, **kwargs):
-        if not _client:
+        if not _registry.client:
             return
-        entries = _server_hooks.get(hook_name, [])
+        entries = _registry.server_hooks.get(hook_name, [])
         for server, endpoint in entries:
             payload = build_hook_context(context, hook_name, **kwargs)
-            _client.invoke_hook(server, endpoint, payload)
+            _registry.client.invoke_hook(server, endpoint, payload)
 
 
 hooks = _Hooks()
