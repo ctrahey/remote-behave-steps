@@ -66,7 +66,7 @@ release-preflight:
 release: release-preflight check test ## Release a new version (usage: make release VERSION=0.2.0)
 	@echo "Releasing v$(VERSION) (current: $(CURRENT_VERSION))"
 	@echo ""
-	sed -i '' 's/^version = ".*"/version = "$(VERSION)"/' pyproject.toml
+	sed 's/^version = ".*"/version = "$(VERSION)"/' pyproject.toml > pyproject.toml.tmp && mv pyproject.toml.tmp pyproject.toml
 	git add pyproject.toml
 	git commit -m "Release v$(VERSION)"
 	git tag -a "v$(VERSION)" -m "Release v$(VERSION)"
