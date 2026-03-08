@@ -27,14 +27,20 @@ def simple_project_dir(tmp_path_factory, server_url):
     base_url = server_url.rsplit("/", 1)[0]
 
     pyproject = project_dir / "pyproject.toml"
-    pyproject.write_text(pyproject.read_text().replace(
-        "http://localhost:9876/openapi.yaml", server_url,
-    ))
+    pyproject.write_text(
+        pyproject.read_text().replace(
+            "http://localhost:9876/openapi.yaml",
+            server_url,
+        )
+    )
 
     verify_steps = project_dir / "features" / "steps" / "verify_steps.py"
-    verify_steps.write_text(verify_steps.read_text().replace(
-        "http://localhost:9876", base_url,
-    ))
+    verify_steps.write_text(
+        verify_steps.read_text().replace(
+            "http://localhost:9876",
+            base_url,
+        )
+    )
 
     return project_dir
 
@@ -47,13 +53,23 @@ def simple_venv(tmp_path_factory, simple_project_dir):
 
     subprocess.run(
         ["uv", "venv", str(venv_dir)],
-        check=True, timeout=30,
+        check=True,
+        timeout=30,
     )
 
     subprocess.run(
-        ["uv", "pip", "install", "--python", str(venv_python),
-         str(PACKAGE_DIR), "requests", "coverage"],
-        check=True, timeout=60,
+        [
+            "uv",
+            "pip",
+            "install",
+            "--python",
+            str(venv_python),
+            str(PACKAGE_DIR),
+            "requests",
+            "coverage",
+        ],
+        check=True,
+        timeout=60,
     )
 
     return venv_python
@@ -64,11 +80,14 @@ def _run_behave(venv_python, project_dir, extra_args=None):
     coverage_data = str(PACKAGE_DIR / ".coverage")
 
     cmd = [
-        str(venv_python), "-m",
-        "coverage", "run",
+        str(venv_python),
+        "-m",
+        "coverage",
+        "run",
         "--source=remote_behave_steps",
         "--parallel-mode",
-        "-m", "behave",
+        "-m",
+        "behave",
         str(project_dir / "features"),
     ]
     if extra_args:
@@ -91,8 +110,7 @@ def test_simple_scenarios_pass(simple_venv, simple_project_dir):
     if result.stderr:
         print(result.stderr)
     assert result.returncode == 0, (
-        f"Simple example behave failed:\n"
-        f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        f"Simple example behave failed:\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
     )
 
 

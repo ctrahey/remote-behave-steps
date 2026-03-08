@@ -6,6 +6,7 @@ the string-to-list normalization path in the library.
 """
 
 import os
+
 from remote_behave_steps import register_remote_steps
 
 server_url = os.environ.get("CATALOG_SERVICE_SPEC", "http://localhost:9877/openapi.yaml")

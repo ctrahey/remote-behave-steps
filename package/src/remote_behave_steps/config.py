@@ -1,12 +1,12 @@
 """Configuration loading for remote_behave_steps.
 
-Reads from pyproject.toml [tool.remote_behave_steps], setup.cfg, or programmatic args.
+Reads from pyproject.toml [tool.remote_behave_steps] or programmatic args.
 """
 
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlparse
-import sys
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -61,7 +61,7 @@ def load_config(servers=None, cache_ttl=None) -> Config:
                 name=s.get("name", ""),
                 timeout=s.get("timeout", DEFAULT_TIMEOUT),
             )
-            for i, s in enumerate(servers)
+            for s in servers
         ]
         return Config(
             servers=server_configs,
@@ -98,11 +98,13 @@ def _read_pyproject(path: Path) -> Config | None:
 
     servers = []
     for s in section.get("servers", []):
-        servers.append(ServerConfig(
-            url=s["url"],
-            name=s.get("name", ""),
-            timeout=s.get("timeout", DEFAULT_TIMEOUT),
-        ))
+        servers.append(
+            ServerConfig(
+                url=s["url"],
+                name=s.get("name", ""),
+                timeout=s.get("timeout", DEFAULT_TIMEOUT),
+            )
+        )
 
     return Config(
         servers=servers,

@@ -31,3 +31,12 @@ htmlcov/
 # Environment
 .env
 .env.*
+
+# Claude Code
+.claude/
+
+# Runtime artifacts
+*.pid
+
+# Lock files (library — consumers use their own resolution)
+uv.lock

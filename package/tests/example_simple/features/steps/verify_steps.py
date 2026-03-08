@@ -6,9 +6,9 @@ The recommended pattern is:
 """
 
 import os
-import requests
-from behave import when, then
 
+import requests
+from behave import then, when
 
 # In a real project, this would be your service's API base URL.
 SERVER_BASE = os.environ.get("TODO_SERVICE_URL", "http://localhost:9876")

@@ -1,18 +1,28 @@
-.PHONY: setup test lint clean all serve stop
+.PHONY: setup test lint lint-api lint-python format typecheck check clean all serve stop pre-commit-install
 
 # Run everything
-all: setup test lint
+all: setup check test
 
 # Set up the venv and install dependencies
 setup:
-	uv venv && uv pip install -e ".[dev]"
+	uv sync
 
 # Run integration tests
 test:
-	.venv/bin/python -m pytest tests/ -v
+	uv run pytest tests/ -v
+
+# All checks (lint + typecheck)
+check: lint typecheck
+
+# Lint everything
+lint: lint-python lint-api
+
+# Lint Python source with ruff
+lint-python:
+	uv run ruff check src/ tests/
 
 # Lint the API specs
-lint:
+lint-api:
 	npx @redocly/cli lint --config ../api/redocly.yaml \
 		../api/schemas/v1/request.yaml \
 		../api/schemas/v1/response.yaml \
@@ -20,6 +30,19 @@ lint:
 		../api/examples/todo-app/openapi.yaml \
 		../api/examples/ecommerce/openapi.yaml \
 		../api/examples/messaging/openapi.yaml
+
+# Auto-format Python source
+format:
+	uv run ruff format src/ tests/
+	uv run ruff check --fix src/ tests/
+
+# Type-check Python source
+typecheck:
+	uv run mypy src/
+
+# Install pre-commit hooks
+pre-commit-install:
+	uv run pre-commit install
 
 SERVER_PORT ?= 9876
 CONTAINER_NAME = remote-behave-steps-test
@@ -37,5 +60,5 @@ stop:
 
 # Remove generated artifacts
 clean:
-	rm -rf .venv *.egg-info dist .pytest_cache
+	rm -rf .venv *.egg-info dist .pytest_cache htmlcov
 	find . -type d -name __pycache__ -exec rm -rf {} +

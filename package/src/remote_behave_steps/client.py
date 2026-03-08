@@ -1,6 +1,8 @@
 """HTTP client for remote step invocation and lifecycle hooks."""
 
 import logging
+import time
+
 import requests
 
 from remote_behave_steps.config import ServerConfig
@@ -11,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 class RemoteStepError(Exception):
     """Raised when a remote step returns an error response."""
+
     def __init__(self, message, code=None, details=None):
         super().__init__(message)
         self.code = code
@@ -24,8 +27,9 @@ class RemoteStepClient:
         self.session = requests.Session()
         self.default_timeout = default_timeout
 
-    def invoke_step(self, server: ServerConfig, step_def: RemoteStepDef,
-                    context: dict, inputs: dict) -> dict:
+    def invoke_step(
+        self, server: ServerConfig, step_def: RemoteStepDef, context: dict, inputs: dict
+    ) -> dict:
         """Invoke a remote step endpoint and return the response data."""
         url = server.base_url + step_def.endpoint
         timeout_ms = step_def.timeout or server.timeout or self.default_timeout
@@ -35,7 +39,7 @@ class RemoteStepClient:
 
         if resp.status_code >= 500:
             raise RemoteStepError(
-                f"Remote step infrastructure error: {resp.status_code} from {url}",
+                f"Remote step infrastructure error: {resp.status_code} from {url}: {resp.text}",
                 code="INFRASTRUCTURE_ERROR",
             )
 
@@ -43,9 +47,7 @@ class RemoteStepClient:
 
         if resp.status_code >= 400:
             error = body.get("error", {})
-            raise AssertionError(
-                error.get("message", f"Remote step failed: {resp.status_code}")
-            )
+            raise AssertionError(error.get("message", f"Remote step failed: {resp.status_code}"))
 
         if body.get("status") == "error":
             error = body.get("error", {})
@@ -61,12 +63,11 @@ class RemoteStepClient:
             resp = self.session.put(url, json=payload, timeout=timeout)
             resp.raise_for_status()
         except requests.RequestException as exc:
-            logger.debug("Hook %s on %s failed: %s", endpoint, server.name, exc)
+            logger.warning("Hook %s on %s failed: %s", endpoint, server.name, exc)
 
     def health_check(self, server: ServerConfig, retries: int = 3):
         """Poll /healthz until the service is ready."""
         url = server.base_url + "/healthz"
-        import time
         for attempt in range(retries):
             try:
                 resp = self.session.get(url, timeout=5)

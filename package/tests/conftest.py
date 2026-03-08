@@ -14,7 +14,8 @@ def _start_container(dockerfile_dir, image_name, container_name):
     """Build and start a Docker container, returning its spec URL."""
     subprocess.run(
         ["docker", "build", "-t", image_name, dockerfile_dir],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
 
     subprocess.run(
@@ -23,14 +24,16 @@ def _start_container(dockerfile_dir, image_name, container_name):
     )
 
     subprocess.run(
-        ["docker", "run", "-d", "--name", container_name,
-         "-p", f"0:{CONTAINER_PORT}", image_name],
-        check=True, capture_output=True,
+        ["docker", "run", "-d", "--name", container_name, "-p", f"0:{CONTAINER_PORT}", image_name],
+        check=True,
+        capture_output=True,
     )
 
     result = subprocess.run(
         ["docker", "port", container_name, str(CONTAINER_PORT)],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     )
     host_port = result.stdout.strip().split(":")[-1]
     base_url = f"http://127.0.0.1:{host_port}"

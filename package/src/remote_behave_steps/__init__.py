@@ -36,17 +36,17 @@ To optionally forward lifecycle hooks to remote services:
 
 import uuid
 
-from behave import use_step_matcher
 from behave import given as behave_given
-from behave import when as behave_when
-from behave import then as behave_then
 from behave import step as behave_step
+from behave import then as behave_then
+from behave import use_step_matcher
+from behave import when as behave_when
 
-from remote_behave_steps.config import load_config
-from remote_behave_steps.discovery import discover_all
 from remote_behave_steps.cache import StepCache
 from remote_behave_steps.client import RemoteStepClient, RemoteStepError
-from remote_behave_steps.context_builder import build_step_context, build_hook_context
+from remote_behave_steps.config import load_config
+from remote_behave_steps.context_builder import build_hook_context, build_step_context
+from remote_behave_steps.discovery import discover_all
 
 __all__ = [
     "register_remote_steps",
@@ -57,6 +57,7 @@ __all__ = [
 
 class _Registry:
     """Consolidated module-level state, resettable for testing."""
+
     def __init__(self):
         self.client = None
         self.config = None
@@ -135,16 +136,18 @@ def register_remote_steps(servers=None, cache_ttl=None):
     use_step_matcher("parse")
 
     for server in config.servers:
-        # Try cache first; on miss, discover_all fetches once for both
-        _discovered = {}  # shared between cache fetch_fn and hook extraction
+        # _discovered is shared between _fetch_steps and the cache-miss branch below.
+        # On cache miss, get_or_fetch calls _fetch_steps which populates _discovered["hooks"].
+        # On cache hit, _discovered stays empty and we fetch hooks separately.
+        # The default arg `s=server` captures the current loop variable by value.
+        _discovered = {}
 
-        def _fetch_steps(s=server):
+        def _fetch_steps(s=server, _disc=_discovered):
             steps, hooks = discover_all(s)
-            _discovered["hooks"] = hooks
+            _disc["hooks"] = hooks
             return steps
 
         step_defs = cache.get_or_fetch(server, _fetch_steps)
-        # If cache hit, _discovered is empty — fetch hooks separately
         if "hooks" not in _discovered:
             _, hook_defs = discover_all(server)
         else:
@@ -165,6 +168,7 @@ def register_remote_steps(servers=None, cache_ttl=None):
 
 def _make_step_function(client, server, step_def):
     """Create a behave step function that calls the remote endpoint."""
+
     def step_function(context, **kwargs):
         _ensure_context_ready(context)
         _ensure_scenario_reset(context)
@@ -215,41 +219,37 @@ class _Hooks:
     def before_scenario(self, context, scenario):
         _ensure_context_ready(context)
         _ensure_scenario_reset(context)
-        all_tags = set(scenario.tags)
-        if hasattr(context, "feature") and context.feature:
-            all_tags |= set(context.feature.tags)
-        if "remote_hooks" not in all_tags:
+        if not self._should_fire_hook(context, scenario=scenario):
             return
         self._fire_hook("before_scenario", context, scenario=scenario)
 
     def after_scenario(self, context, scenario):
-        all_tags = set(scenario.tags)
-        if hasattr(context, "feature") and context.feature:
-            all_tags |= set(context.feature.tags)
-        if "remote_hooks" not in all_tags:
+        if not self._should_fire_hook(context, scenario=scenario):
             return
         self._fire_hook("after_scenario", context, scenario=scenario)
 
     def before_step(self, context, step):
         context._remote_current_step = step
-        all_tags = set()
-        if hasattr(context, "scenario") and context.scenario:
-            all_tags |= set(context.scenario.tags)
-        if hasattr(context, "feature") and context.feature:
-            all_tags |= set(context.feature.tags)
-        if "remote_hooks" not in all_tags:
+        if not self._should_fire_hook(context):
             return
         self._fire_hook("before_step", context, step=step)
 
     def after_step(self, context, step):
+        if not self._should_fire_hook(context):
+            return
+        self._fire_hook("after_step", context, step=step)
+
+    @staticmethod
+    def _should_fire_hook(context, scenario=None) -> bool:
+        """Check if the 'remote_hooks' tag is present on the scenario or feature."""
         all_tags = set()
-        if hasattr(context, "scenario") and context.scenario:
+        if scenario is not None:
+            all_tags |= set(scenario.tags)
+        elif hasattr(context, "scenario") and context.scenario:
             all_tags |= set(context.scenario.tags)
         if hasattr(context, "feature") and context.feature:
             all_tags |= set(context.feature.tags)
-        if "remote_hooks" not in all_tags:
-            return
-        self._fire_hook("after_step", context, step=step)
+        return "remote_hooks" in all_tags
 
     def _fire_hook(self, hook_name, context, **kwargs):
         if not _registry.client:

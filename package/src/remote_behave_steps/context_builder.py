@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 def build_step_context(context) -> dict:
     """Build a StepExecutionContext dict from a behave Context during step execution."""
-    run_id = getattr(context, "remote_steps_run_id", str(uuid.uuid4()))
+    run_id = getattr(context, "remote_steps_run_id", None) or str(uuid.uuid4())
 
     ctx = {"run_id": run_id, "timestamp": datetime.now(timezone.utc).isoformat()}
 
@@ -41,15 +41,18 @@ def build_step_context(context) -> dict:
 
 def build_hook_context(context, hook_name: str, **kwargs) -> dict:
     """Build a hook request payload from behave context."""
-    run_id = getattr(context, "remote_steps_run_id", str(uuid.uuid4()))
+    run_id = getattr(context, "remote_steps_run_id", None) or str(uuid.uuid4())
     payload = {"run_id": run_id, "timestamp": datetime.now(timezone.utc).isoformat()}
 
     # Feature-level hooks
     feature = kwargs.get("feature") or getattr(context, "feature", None)
     if feature and hook_name in (
-        "before_feature", "after_feature",
-        "before_scenario", "after_scenario",
-        "before_step", "after_step",
+        "before_feature",
+        "after_feature",
+        "before_scenario",
+        "after_scenario",
+        "before_step",
+        "after_step",
     ):
         payload["feature"] = {
             "name": feature.name,
@@ -60,8 +63,10 @@ def build_hook_context(context, hook_name: str, **kwargs) -> dict:
     # Scenario-level hooks
     scenario = kwargs.get("scenario") or getattr(context, "scenario", None)
     if scenario and hook_name in (
-        "before_scenario", "after_scenario",
-        "before_step", "after_step",
+        "before_scenario",
+        "after_scenario",
+        "before_step",
+        "after_step",
     ):
         scenario_id = str(uuid.uuid5(uuid.UUID(run_id), scenario.name))
         payload["scenario"] = {

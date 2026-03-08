@@ -25,15 +25,21 @@ def full_project_dir(tmp_path_factory, full_server_url):
 
     # Patch remote.py with the actual server URL
     remote_steps = project_dir / "features" / "steps" / "remote.py"
-    remote_steps.write_text(remote_steps.read_text().replace(
-        "http://localhost:9877/openapi.yaml", full_server_url,
-    ))
+    remote_steps.write_text(
+        remote_steps.read_text().replace(
+            "http://localhost:9877/openapi.yaml",
+            full_server_url,
+        )
+    )
 
     # Patch verify_steps.py with the actual base URL
     verify_steps = project_dir / "features" / "steps" / "verify_steps.py"
-    verify_steps.write_text(verify_steps.read_text().replace(
-        "http://localhost:9877", base_url,
-    ))
+    verify_steps.write_text(
+        verify_steps.read_text().replace(
+            "http://localhost:9877",
+            base_url,
+        )
+    )
 
     # Set env var so the remote.py in the full example finds the right server
     os.environ["CATALOG_SERVICE_SPEC"] = full_server_url
@@ -49,13 +55,23 @@ def full_venv(tmp_path_factory, full_project_dir):
 
     subprocess.run(
         ["uv", "venv", str(venv_dir)],
-        check=True, timeout=30,
+        check=True,
+        timeout=30,
     )
 
     subprocess.run(
-        ["uv", "pip", "install", "--python", str(venv_python),
-         str(PACKAGE_DIR), "requests", "coverage"],
-        check=True, timeout=60,
+        [
+            "uv",
+            "pip",
+            "install",
+            "--python",
+            str(venv_python),
+            str(PACKAGE_DIR),
+            "requests",
+            "coverage",
+        ],
+        check=True,
+        timeout=60,
     )
 
     return venv_python
@@ -65,14 +81,21 @@ def _run_behave(venv_python, project_dir, extra_args=None, feature_file=None):
     """Run behave under coverage in the full example project."""
     coverage_data = str(PACKAGE_DIR / ".coverage")
 
-    target = str(project_dir / "features" / feature_file) if feature_file else str(project_dir / "features")
+    target = (
+        str(project_dir / "features" / feature_file)
+        if feature_file
+        else str(project_dir / "features")
+    )
 
     cmd = [
-        str(venv_python), "-m",
-        "coverage", "run",
+        str(venv_python),
+        "-m",
+        "coverage",
+        "run",
         "--source=remote_behave_steps",
         "--parallel-mode",
-        "-m", "behave",
+        "-m",
+        "behave",
         target,
     ]
     if extra_args:
@@ -93,15 +116,14 @@ def _run_behave(venv_python, project_dir, extra_args=None, feature_file=None):
 
 def test_full_scenarios_pass(full_venv, full_project_dir):
     """Run the full example's behave scenarios with all hooks wired up."""
-    result = _run_behave(full_venv, full_project_dir,
-                         extra_args=["--no-capture"],
-                         feature_file="catalog.feature")
+    result = _run_behave(
+        full_venv, full_project_dir, extra_args=["--no-capture"], feature_file="catalog.feature"
+    )
     print(result.stdout)
     if result.stderr:
         print(result.stderr)
     assert result.returncode == 0, (
-        f"Full example behave failed:\n"
-        f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        f"Full example behave failed:\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
     )
 
 
@@ -117,10 +139,12 @@ def test_full_steps_catalog(full_venv, full_project_dir):
 
 def test_error_500_infrastructure(full_venv, full_project_dir):
     """A step hitting a 500 should raise RemoteStepError."""
-    result = _run_behave(full_venv, full_project_dir,
-                         extra_args=["--no-capture", "--name",
-                                     "Server returns 500"],
-                         feature_file="errors.feature")
+    result = _run_behave(
+        full_venv,
+        full_project_dir,
+        extra_args=["--no-capture", "--name", "Server returns 500"],
+        feature_file="errors.feature",
+    )
     print(result.stdout)
     assert result.returncode != 0
     assert "RemoteStepError" in result.stdout or "infrastructure error" in result.stdout.lower()
@@ -128,10 +152,12 @@ def test_error_500_infrastructure(full_venv, full_project_dir):
 
 def test_error_422_validation(full_venv, full_project_dir):
     """A step hitting a 4xx should raise AssertionError with the error message."""
-    result = _run_behave(full_venv, full_project_dir,
-                         extra_args=["--no-capture", "--name",
-                                     "Server returns 422"],
-                         feature_file="errors.feature")
+    result = _run_behave(
+        full_venv,
+        full_project_dir,
+        extra_args=["--no-capture", "--name", "Server returns 422"],
+        feature_file="errors.feature",
+    )
     print(result.stdout)
     assert result.returncode != 0
     assert "missing required field" in result.stdout
@@ -139,10 +165,12 @@ def test_error_422_validation(full_venv, full_project_dir):
 
 def test_error_logical(full_venv, full_project_dir):
     """A step returning status:'error' should raise AssertionError."""
-    result = _run_behave(full_venv, full_project_dir,
-                         extra_args=["--no-capture", "--name",
-                                     "Server returns 200 with status error"],
-                         feature_file="errors.feature")
+    result = _run_behave(
+        full_venv,
+        full_project_dir,
+        extra_args=["--no-capture", "--name", "Server returns 200 with status error"],
+        feature_file="errors.feature",
+    )
     print(result.stdout)
     assert result.returncode != 0
     assert "category does not exist" in result.stdout

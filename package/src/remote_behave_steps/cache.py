@@ -8,7 +8,6 @@ from pathlib import Path
 from remote_behave_steps.config import ServerConfig
 from remote_behave_steps.discovery import RemoteStepDef
 
-
 CACHE_DIR = Path.home() / ".cache" / "remote_behave_steps"
 
 
@@ -42,9 +41,13 @@ class StepCache:
         data = {
             "timestamp": time.time(),
             "steps": [
-                {"pattern": s.pattern, "endpoint": s.endpoint,
-                 "summary": s.summary, "timeout": s.timeout,
-                 "step_type": s.step_type}
+                {
+                    "pattern": s.pattern,
+                    "endpoint": s.endpoint,
+                    "summary": s.summary,
+                    "timeout": s.timeout,
+                    "step_type": s.step_type,
+                }
                 for s in steps
             ],
         }
@@ -52,4 +55,5 @@ class StepCache:
 
     def _cache_path(self, server: ServerConfig) -> Path:
         key = hashlib.sha256(server.url.encode()).hexdigest()[:16]
-        return CACHE_DIR / f"{server.name}_{key}.json"
+        safe_name = "".join(c if c.isalnum() or c in "-_." else "_" for c in server.name)
+        return CACHE_DIR / f"{safe_name}_{key}.json"

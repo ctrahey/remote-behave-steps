@@ -1,11 +1,14 @@
 """OpenAPI spec parsing and remote step discovery."""
 
+import logging
 from dataclasses import dataclass
+
 import requests
 import yaml
 
 from remote_behave_steps.config import ServerConfig
 
+logger = logging.getLogger(__name__)
 
 VALID_STEP_TYPES = {"given", "when", "then", "step"}
 
@@ -13,9 +16,10 @@ VALID_STEP_TYPES = {"given", "when", "then", "step"}
 @dataclass
 class RemoteStepDef:
     """A step definition discovered from a remote OpenAPI spec."""
-    pattern: str        # x-behave-pattern value
-    endpoint: str       # URL path (e.g., /existing-todos)
-    summary: str        # Human-readable summary
+
+    pattern: str  # x-behave-pattern value
+    endpoint: str  # URL path (e.g., /existing-todos)
+    summary: str  # Human-readable summary
     timeout: int | None  # Per-step timeout override (ms), or None for default
     step_type: str = "given"  # behave step type: given, when, then, or step
 
@@ -23,8 +27,9 @@ class RemoteStepDef:
 @dataclass
 class RemoteHookDef:
     """A lifecycle hook discovered from a remote OpenAPI spec."""
+
     hook_name: str  # e.g., "before_scenario"
-    endpoint: str   # URL path (e.g., /hooks/before-scenario)
+    endpoint: str  # URL path (e.g., /hooks/before-scenario)
 
 
 # Map well-known hook paths to hook names
@@ -71,6 +76,7 @@ def _extract_steps(spec: dict) -> list[RemoteStepDef]:
     for path, path_item in spec.get("paths", {}).items():
         for method, operation in path_item.items():
             if not isinstance(operation, dict):
+                logger.debug("Skipping non-dict entry %r under path %s", method, path)
                 continue
             pattern = operation.get("x-behave-pattern")
             if pattern:
@@ -78,13 +84,15 @@ def _extract_steps(spec: dict) -> list[RemoteStepDef]:
                 step_type = raw_type.lower() if isinstance(raw_type, str) else "given"
                 if step_type not in VALID_STEP_TYPES:
                     step_type = "given"
-                steps.append(RemoteStepDef(
-                    pattern=pattern,
-                    endpoint=path,
-                    summary=operation.get("summary", ""),
-                    timeout=operation.get("x-behave-timeout"),
-                    step_type=step_type,
-                ))
+                steps.append(
+                    RemoteStepDef(
+                        pattern=pattern,
+                        endpoint=path,
+                        summary=operation.get("summary", ""),
+                        timeout=operation.get("x-behave-timeout"),
+                        step_type=step_type,
+                    )
+                )
     return steps
 
 

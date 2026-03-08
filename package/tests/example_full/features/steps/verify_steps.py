@@ -1,8 +1,9 @@
 """Local When/Then steps for the retail catalog example."""
 
 import os
+
 import requests
-from behave import when, then
+from behave import then, when
 
 SERVER_BASE = os.environ.get("CATALOG_SERVICE_URL", "http://localhost:9877")
 
@@ -45,9 +46,7 @@ def step_catalog_should_include(context, name):
 def step_product_should_cost(context, name, price):
     for p in context.product_list:
         if p["name"] == name:
-            assert p["price"] == float(price), (
-                f"Expected ${price}, got ${p['price']}"
-            )
+            assert p["price"] == float(price), f"Expected ${price}, got ${p['price']}"
             return
     raise AssertionError(f"Product '{name}' not found")
 
